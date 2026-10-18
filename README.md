@@ -6,12 +6,40 @@ GitHub の PR とそのコメントを収集して JSONL に保存する。
 |---|---|
 | `collect.py` | `data/prs.jsonl`, `data/comments.jsonl` |
 
+## 必要なもの
+
+| 名前 | 用途 | 必須 |
+|---|---|---|
+| Python 3.8 以上 | `collect.py` の実行 | ○ |
+| [requests](https://pypi.org/project/requests/) | GitHub API の呼び出し (標準ライブラリ以外で唯一の依存) | ○ |
+| GitHub アクセストークン | API の認証。なしだと 60 req/hour に制限される | ○ |
+| python3-venv | プロジェクト専用の仮想環境 | 推奨 |
+| Git | コミット・push | 開発時 |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | ログイン、PR 作成、`gh auth token` でのトークン取得 | 任意 |
+
+アクセストークンは GitHub の Settings → Developer settings → Personal access tokens で作る。
+権限は対象リポジトリの読み取りだけでよい
+(Fine-grained なら Pull requests / Issues / Contents を Read-only、Classic なら `repo`。公開リポジトリだけなら `public_repo`)。
+
 ## セットアップ
 
+Ubuntu / WSL の場合:
+
 ```bash
+sudo apt install python3 python3-venv git
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 export GITHUB_TOKEN=ghp_...        # repo 読み取り権限
 ```
+
+次回からは `source .venv/bin/activate` してから実行する。
+
+Debian / Ubuntu ではシステムの Python に直接 `pip install` すると
+`externally-managed-environment` エラーになる (PEP 668)。上のように venv を使うか、
+`sudo apt install python3-requests` でシステムに入れる。
+
+`gh` でログイン済みなら、トークンを作らずに `export GITHUB_TOKEN=$(gh auth token)` でもよい。
 
 ## 実行
 
