@@ -1,10 +1,10 @@
 # GitHub PR コメント収集
 
-GitHub の PR とそのコメントを収集して JSONL に保存する。
+GitHub の PR とそのコメントを収集して JSONL と Markdown に保存する。
 
 | スクリプト | 出力 |
 |---|---|
-| `collect.py` | `data/prs.jsonl`, `data/comments.jsonl` |
+| `collect.py` | `data/prs.jsonl`, `data/comments.jsonl`, `data/prs.md` |
 
 ## セットアップ
 
@@ -35,9 +35,12 @@ python collect.py --repo owner/name --since 2025-04-01 --limit 20   # まず試�
 `draft`, `created_at`, `merged_at`, `closed_at`, `additions`, `deletions`, `changed_files`, `url`
 
 `comments.jsonl` (コメント 1 件 = 1 行): `kind`, `comment_id`, `author`, `author_is_bot`,
-`created_at`, `body`, `review_state`, `path`, `in_reply_to_id`, `pr_number`, `pr_author`
+`created_at`, `body`, `review_state`, `path`, `line`, `in_reply_to_id`, `pr_number`, `pr_author`
 
 `kind` は `review_body` / `review_comment` / `issue_comment` のいずれか。
+
+`prs.md` は人が読む用の表。コメント 1 件 = 1 行で、PR・PR 作成者・コメント送信者・種類・
+対象ファイル (インラインなら `パス L行番号`、それ以外は「PR 全体」)・コメント内容・日時を並べる。
 
 ## GitHub API の注意点
 
