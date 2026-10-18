@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""GitHub の PR とそのコメントを収集して JSONL に保存する。
+"""GitHub の PR とそのコメントを収集して JSONL と Markdown に保存する。
 
 出力:
     <out>/prs.jsonl      PR 1 件 = 1 行
     <out>/comments.jsonl コメント 1 件 = 1 行 (reviews / インライン / 会話の 3 種類)
+    <out>/prs.md         PR ごとにコメントを時系列で並べた、人が読む用のまとめ
 
 使い方:
     export GITHUB_TOKEN=ghp_...
@@ -83,6 +84,7 @@ def collect_pr_comments(owner: str, repo: str, number: int):
             "body": rv["body"],
             "review_state": rv.get("state"),
             "path": None,
+            "line": None,
             "in_reply_to_id": None,
         }
 
@@ -96,6 +98,7 @@ def collect_pr_comments(owner: str, repo: str, number: int):
             "body": c["body"],
             "review_state": None,
             "path": c.get("path"),
+            "line": c.get("line") or c.get("original_line"),
             "in_reply_to_id": c.get("in_reply_to_id"),
         }
 
@@ -109,8 +112,47 @@ def collect_pr_comments(owner: str, repo: str, number: int):
             "body": c["body"],
             "review_state": None,
             "path": None,
+            "line": None,
             "in_reply_to_id": None,
         }
+
+
+KIND_LABEL = {
+    "review_body": "レビュー",
+    "review_comment": "インライン",
+    "issue_comment": "会話",
+}
+
+
+MD_HEADER = "| PR | PR 作成者 | コメント送信者 | 種類 | 対象ファイル | コメント内容 | 日時 |\n"
+MD_HEADER += "|---|---|---|---|---|---|---|\n"
+
+
+def md_cell(text: str) -> str:
+    """表のセルに入れられるよう、改行と | をエスケープする。"""
+    return text.strip().replace("|", "\\|").replace("\r\n", "\n").replace("\n", "<br>")
+
+
+def write_markdown_pr(f, pr: dict, comments: list[dict]) -> None:
+    """1 つの PR のコメントを表の行として書き出す。コメントがない PR も 1 行残す。"""
+    pr_cell = f"[#{pr['pr_number']}]({pr['url']}) {md_cell(pr['title'])}"
+    if not comments:
+        f.write(f"| {pr_cell} | {pr['author']} | — | — | — | _コメントなし_ | — |\n")
+        return
+    # 種類ごとに別エンドポイントから取っているので、時系列に並べ直す
+    for c in sorted(comments, key=lambda c: c["created_at"] or ""):
+        kind = KIND_LABEL[c["kind"]]
+        if c["review_state"]:
+            kind += f" ({c['review_state']})"
+        if c["path"]:
+            target = f"`{c['path']}`" + (f" L{c['line']}" if c["line"] else "")
+        else:
+            target = "PR 全体"
+        author = c["author"] + (" (bot)" if c["author_is_bot"] else "")
+        f.write(
+            f"| {pr_cell} | {pr['author']} | {author} | {kind} | {target} "
+            f"| {md_cell(c['body'] or '')} | {c['created_at'] or ''} |\n"
+        )
 
 
 def main() -> None:
@@ -129,6 +171,9 @@ def main() -> None:
 
     prs_f = (out / "prs.jsonl").open("w", encoding="utf-8")
     com_f = (out / "comments.jsonl").open("w", encoding="utf-8")
+    md_f = (out / "prs.md").open("w", encoding="utf-8")
+    md_f.write(f"# {args.repo} の PR コメント ({args.since} 以降に更新)\n\n")
+    md_f.write(MD_HEADER)
     n_pr = n_com = 0
 
     # updated 降順で辿り、since より古くなった時点で打ち切る
@@ -168,16 +213,20 @@ def main() -> None:
         prs_f.write(json.dumps(pr, ensure_ascii=False) + "\n")
         n_pr += 1
 
+        comments = []
         for c in collect_pr_comments(owner, repo, number):
             c["pr_number"] = number
             c["pr_author"] = pr["author"]
             com_f.write(json.dumps(c, ensure_ascii=False) + "\n")
+            comments.append(c)
             n_com += 1
+        write_markdown_pr(md_f, pr, comments)
 
         print(f"#{number} {pr['title'][:50]}", file=sys.stderr)
 
     prs_f.close()
     com_f.close()
+    md_f.close()
     print(f"\nPR {n_pr} 件 / コメント {n_com} 件を {out}/ に保存しました", file=sys.stderr)
 
 
